@@ -13,7 +13,7 @@ pub fn get_temperature(config: ConfigData) -> f32 {
         path.clone()
     ).expect(&format!("Temperature sensor {} doesn't exist!", path));
 
-    return temperature.trim_end().parse().unwrap();
+    return temperature.trim_end().parse::<f32>().unwrap();
 }
 
 // TODO: Why the heck is the API like this?
