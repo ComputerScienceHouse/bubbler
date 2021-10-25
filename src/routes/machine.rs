@@ -7,6 +7,9 @@ use std::time::Duration;
 pub fn get_temperature(config: ConfigData) -> f32 {
     let temperature_id = 
         config.temperature_id;
+    if temperature_id.is_empty() {
+        return 0.0;
+    }
     let path = 
         format!("/mnt/w1/{}/temperature12", temperature_id);
     let temperature = fs::read_to_string(
