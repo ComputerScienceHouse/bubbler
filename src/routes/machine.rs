@@ -42,29 +42,39 @@ pub enum DropError {
     BadSlot
 }
 
+pub fn run_motor(slot_id: String, state: bool) -> Result<DropState, DropError> {
+    let num_state = match state {
+        true  => "1",
+        false => "0",
+    };
+
+    let motor_okay = match slot_id.len() > 4 {
+        true  => fs::write(format!("/mnt/w1/{}/PIO", slot_id), num_state),
+        false => fs::write(format!("/sys/class/gpio/gpio{}/value", slot_id), num_state),
+    };
+    return match motor_okay {
+        Err(err) => {
+            println!("Error actuating motor: {:?}", err);
+            return Err(DropError::MotorFailed);
+        },
+        Ok(_) => Ok(DropState::Success),
+    };
+}
+
 pub fn drop(config: ConfigData, slot: usize) -> Result<DropState, DropError> {
     if slot >= config.slot_ids.len() {
         return Err(DropError::BadSlot);
     }
 
+    let slot_id = &config.slot_ids[slot - 1];
     println!("Dropping {}!", slot);
 
-    match fs::write(format!("/mnt/w1/{}/PIO",
-                            config.slot_ids[slot - 1]), "1") {
-        Err(err) => {
-            println!("Error actuating motor: {:?}", err);
-            return Err(DropError::MotorFailed);
-        },
-        Ok(_) => {},
+    if let Err(err) = run_motor(slot_id.clone(), true) {
+        return Err(err);
     }
     thread::sleep(Duration::from_millis(config.drop_delay));
-    match fs::write(format!("/mnt/w1/{}/PIO",
-                            config.slot_ids[slot - 1]), "0") {
-        Err(err) => {
-            println!("Error actuating motor: {:?}", err);
-            return Err(DropError::MotorFailed);
-        },
-        Ok(_) => {},
+    if let Err(err) = run_motor(slot_id.clone(), false) {
+        return Err(err);
     }
     thread::sleep(Duration::from_secs(2));
 
