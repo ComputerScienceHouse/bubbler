@@ -32,8 +32,19 @@ git clone https://github.com/ComputerScienceHouse/bubbler
 
 Build bubbler:
 
+#### Compilation
+
 ```bash
 cargo build --release
+```
+
+#### Cross compilation
+
+Bubbler supports `cross`. To cross-compile for ARM, simply run
+
+```bash
+cargo install cross
+cross build --target=armv7-unknown-linux-gnueabihf --release
 ```
 
 Copy `.env.example` to `.env`
