@@ -62,7 +62,7 @@ pub fn run_motor(slot_id: String, state: bool) -> Result<DropState, DropError> {
 }
 
 pub fn drop(config: ConfigData, slot: usize) -> Result<DropState, DropError> {
-    if slot >= config.slot_ids.len() {
+    if slot > config.slot_ids.len() || slot <= 0 {
         return Err(DropError::BadSlot);
     }
 
