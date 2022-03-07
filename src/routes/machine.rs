@@ -57,7 +57,7 @@ pub fn get_slots(config: ConfigData) -> Vec<SlotStatus> {
         SlotStatus {
             id: ow_id.clone(),
             number: number as i32,
-            stocked: File::open(format!("/mnt/w1/{}/id", &ow_id)).is_err()
+            stocked: File::open(format!("/mnt/w1/{}/id", &ow_id)).is_ok()
         }
     }).collect()
 }
