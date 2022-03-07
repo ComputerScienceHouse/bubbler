@@ -19,6 +19,7 @@ async fn main() -> std::io::Result<()> {
             )
             .service(routes::drop)
             .service(routes::health)
+            .service(routes::get_slots)
     })
     .bind(("127.0.0.1", 8080))?
     .run()

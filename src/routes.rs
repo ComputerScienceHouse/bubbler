@@ -15,6 +15,11 @@ struct HealthReport {
     slots: Vec<String>,
     temp: f32,
 }
+#[derive(Serialize)]
+struct SlotReport {
+    slots: Vec<machine::SlotStatus>,
+    temp: f32,
+}
 
 #[derive(Serialize, Deserialize)]
 struct DropRequest {
@@ -56,7 +61,7 @@ async fn drop(data: web::Data<Mutex<AppData>>, req_body: web::Json<DropRequest>)
 
 #[get("/health")]
 async fn health(data: web::Data<Mutex<AppData>>) -> impl Responder {
-    let slots = machine::get_slots(data.lock().unwrap().config.clone());
+    let slots = machine::get_slots_old(data.lock().unwrap().config.clone());
     let temperature = machine::get_temperature(data.lock().unwrap().config.clone());
 
     let temperature = temperature * (9.0/5.0) + 32.0;
@@ -64,5 +69,16 @@ async fn health(data: web::Data<Mutex<AppData>>) -> impl Responder {
     HttpResponse::Ok().json(HealthReport {
         slots: slots.to_vec(),
         temp: temperature,
+    })
+}
+
+#[get("/slots")]
+async fn get_slots(data: web::Data<Mutex<AppData>>) -> impl Responder {
+    let slots = machine::get_slots(data.lock().unwrap().config.clone());
+    let temp = machine::get_temperature(data.lock().unwrap().config.clone());
+
+    HttpResponse::Ok().json(SlotReport {
+        slots,
+        temp,
     })
 }

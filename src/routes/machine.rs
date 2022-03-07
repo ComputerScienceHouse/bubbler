@@ -1,7 +1,8 @@
-use std::fs;
+use serde::Serialize;
 
 use super::config::ConfigData;
 use std::thread;
+use std::fs::{self, File};
 use std::time::Duration;
 
 pub fn get_temperature(config: ConfigData) -> f32 {
@@ -32,7 +33,7 @@ pub fn get_temperature(config: ConfigData) -> f32 {
 }
 
 // TODO: Why the heck is the API like this?
-pub fn get_slots(config: ConfigData) -> Vec<String> {
+pub fn get_slots_old(config: ConfigData) -> Vec<String> {
     let mut slots: Vec<String> = Vec::new();
     for slot in config.slot_ids {
         slots.push(
@@ -43,6 +44,22 @@ pub fn get_slots(config: ConfigData) -> Vec<String> {
         )
     }
     return slots;
+}
+
+#[derive(Serialize)]
+pub struct SlotStatus {
+    pub id: String,
+    pub number: i32,
+    pub stocked: bool,
+}
+pub fn get_slots(config: ConfigData) -> Vec<SlotStatus> {
+    config.slot_ids.iter().enumerate().map(|(number, ow_id)| {
+        SlotStatus {
+            id: ow_id.clone(),
+            number: number as i32,
+            stocked: File::open(format!("/mnt/w1/{}/id", &ow_id)).is_err()
+        }
+    }).collect()
 }
 
 pub enum DropState {
