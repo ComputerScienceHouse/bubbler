@@ -1,5 +1,6 @@
 use std::env;
 use std::fs;
+use std::sync::{Arc, Mutex};
 
 #[derive(Clone)]
 pub struct ConfigData {
@@ -51,5 +52,6 @@ impl ConfigData {
 
 #[derive(Clone)]
 pub struct AppData {
-    pub config: ConfigData
+    pub config: ConfigData,
+    pub drop_lock: Arc<Mutex<()>>,
 }

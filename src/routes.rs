@@ -39,6 +39,8 @@ struct DropErrorRes {
 
 #[post("/drop")]
 async fn drop(data: web::Data<AppData>, req_body: web::Json<DropRequest>) -> impl Responder {
+    let drop_lock = (*data.drop_lock).lock().unwrap();
+
     match machine::drop(data.config.clone(), req_body.slot) {
         Ok(_) => HttpResponse::Ok().json(DropResponse {
             message: "Dropped drink from slot ".to_string() + &req_body.slot.to_string()

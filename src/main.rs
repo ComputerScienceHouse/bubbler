@@ -1,5 +1,7 @@
 extern crate actix_web;
 
+use std::sync::{Arc, Mutex};
+
 use actix_web::{web, App, HttpServer};
 
 pub mod routes;
@@ -11,7 +13,8 @@ async fn main() -> std::io::Result<()> {
     config_data.initialize_slots().unwrap();
 
     let app_data = web::Data::new(AppData {
-        config: config_data
+        config: config_data,
+        drop_lock: Arc::new(Mutex::new(())),
     });
 
     HttpServer::new(move || {
