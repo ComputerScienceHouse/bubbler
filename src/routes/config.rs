@@ -1,5 +1,6 @@
 use std::env;
 use std::fs;
+use std::sync::{Arc, Mutex};
 
 #[derive(Clone)]
 pub struct ConfigData {
@@ -9,8 +10,8 @@ pub struct ConfigData {
 }
 
 impl ConfigData {
-    pub fn initialize_slots(self: ConfigData) -> std::io::Result<()> {
-        for slot in self.slot_ids {
+    pub fn initialize_slots(self: &ConfigData) -> std::io::Result<()> {
+        for slot in self.clone().slot_ids {
             if slot.len() <= 4 {
                 fs::write(
                     "/sys/class/gpio/export",
@@ -49,6 +50,8 @@ impl ConfigData {
     }
 }
 
+#[derive(Clone)]
 pub struct AppData {
-    pub config: ConfigData
+    pub config: ConfigData,
+    pub drop_lock: Arc<Mutex<()>>,
 }
