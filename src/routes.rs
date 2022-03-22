@@ -3,7 +3,6 @@ extern crate serde_json;
 use actix_web::{get, post, web, HttpResponse, Responder};
 use actix_web::http::StatusCode;
 use serde::{Deserialize, Serialize};
-use std::sync::Mutex;
 
 pub mod machine;
 pub mod config;
@@ -39,8 +38,8 @@ struct DropErrorRes {
 }
 
 #[post("/drop")]
-async fn drop(data: web::Data<Mutex<AppData>>, req_body: web::Json<DropRequest>) -> impl Responder {
-    match machine::drop(data.lock().unwrap().config.clone(), req_body.slot) {
+async fn drop(data: web::Data<AppData>, req_body: web::Json<DropRequest>) -> impl Responder {
+    match machine::drop(data.config.clone(), req_body.slot) {
         Ok(_) => HttpResponse::Ok().json(DropResponse {
             message: "Dropped drink from slot ".to_string() + &req_body.slot.to_string()
         }),
@@ -60,9 +59,9 @@ async fn drop(data: web::Data<Mutex<AppData>>, req_body: web::Json<DropRequest>)
 }
 
 #[get("/health")]
-async fn health(data: web::Data<Mutex<AppData>>) -> impl Responder {
-    let slots = machine::get_slots_old(data.lock().unwrap().config.clone());
-    let temperature = machine::get_temperature(data.lock().unwrap().config.clone());
+async fn health(data: web::Data<AppData>) -> impl Responder {
+    let slots = machine::get_slots_old(data.config.clone());
+    let temperature = machine::get_temperature(data.config.clone());
 
     let temperature = temperature * (9.0/5.0) + 32.0;
 
@@ -73,9 +72,9 @@ async fn health(data: web::Data<Mutex<AppData>>) -> impl Responder {
 }
 
 #[get("/slots")]
-async fn get_slots(data: web::Data<Mutex<AppData>>) -> impl Responder {
-    let slots = machine::get_slots(data.lock().unwrap().config.clone());
-    let temp = machine::get_temperature(data.lock().unwrap().config.clone());
+async fn get_slots(data: web::Data<AppData>) -> impl Responder {
+    let slots = machine::get_slots(data.config.clone());
+    let temp = machine::get_temperature(data.config.clone());
 
     HttpResponse::Ok().json(SlotReport {
         slots,
