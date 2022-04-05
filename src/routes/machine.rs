@@ -92,6 +92,7 @@ pub fn run_motor(slot_id: &str, state: bool) -> Result<DropState, DropError> {
 
 pub fn drop(config: ConfigData, slot: usize) -> Result<DropState, DropError> {
     if slot > config.slot_ids.len() || slot <= 0 {
+        eprintln!("We were asked to drop an invalid slot {}: BadSlot!", slot);
         return Err(DropError::BadSlot);
     }
 
@@ -100,15 +101,21 @@ pub fn drop(config: ConfigData, slot: usize) -> Result<DropState, DropError> {
 
     let mut result = Ok(DropState::Success);
     if let Err(err) = run_motor(&slot_id, true) {
-        eprintln!("Problem dropping {}!", slot_id);
+        eprintln!("Problem dropping {} ({})! {}", slot, slot_id, err);
         result = Err(err);
     } else {
+        println!("Sleeping for {}ms after dropping", config.drop_delay);
         thread::sleep(Duration::from_millis(config.drop_delay));
     }
+
+    println!("Shutting off motor for slot {} ({})", slot, slot_id);
     if let Err(err) = run_motor(&slot_id, false) {
+        eprintln!("Couldn't turn off motor for slot {} ({})! {}", slot, slot_id, err);
         return Err(err);
     }
+    println!("Drop completed. Allowing 2 seconds to settle.");
     thread::sleep(Duration::from_secs(2));
+    println!("Drop transaction finished with {}", result);
 
     result
 }

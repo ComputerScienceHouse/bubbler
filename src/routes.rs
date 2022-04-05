@@ -40,7 +40,8 @@ struct DropErrorRes {
 
 #[post("/drop")]
 async fn drop(data: web::Data<Mutex<AppData>>, req_body: web::Json<DropRequest>) -> impl Responder {
-    match machine::drop(data.lock().unwrap().config.clone(), req_body.slot) {
+    let drop_result = machine::drop(data.lock().unwrap().config.clone(), req_body.slot);
+    match drop_result {
         Ok(_) => HttpResponse::Ok().json(DropResponse {
             message: "Dropped drink from slot ".to_string() + &req_body.slot.to_string()
         }),
