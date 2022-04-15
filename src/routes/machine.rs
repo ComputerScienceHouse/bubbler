@@ -3,6 +3,7 @@ use serde::Serialize;
 use super::config::ConfigData;
 use std::thread;
 use std::fs::{self, File};
+use std::fmt::Debug;
 use std::time::Duration;
 
 pub fn get_temperature(config: ConfigData) -> f32 {
@@ -62,10 +63,12 @@ pub fn get_slots(config: ConfigData) -> Vec<SlotStatus> {
     }).collect()
 }
 
+#[derive(Debug)]
 pub enum DropState {
     Success
 }
 
+#[derive(Debug)]
 pub enum DropError {
     MotorFailed,
     BadSlot
@@ -101,7 +104,7 @@ pub fn drop(config: ConfigData, slot: usize) -> Result<DropState, DropError> {
 
     let mut result = Ok(DropState::Success);
     if let Err(err) = run_motor(&slot_id, true) {
-        eprintln!("Problem dropping {} ({})! {}", slot, slot_id, err);
+        eprintln!("Problem dropping {} ({})! {:?}", slot, slot_id, err);
         result = Err(err);
     } else {
         println!("Sleeping for {}ms after dropping", config.drop_delay);
@@ -110,12 +113,20 @@ pub fn drop(config: ConfigData, slot: usize) -> Result<DropState, DropError> {
 
     println!("Shutting off motor for slot {} ({})", slot, slot_id);
     if let Err(err) = run_motor(&slot_id, false) {
-        eprintln!("Couldn't turn off motor for slot {} ({})! {}", slot, slot_id, err);
+        eprintln!("Couldn't turn off motor for slot {} ({})! {:?}", slot, slot_id, err);
+        result = Err(err);
+    }
+
+    println!("Drop completed. Allowing another drop time to stop motors again.");
+    thread::sleep(Duration::from_millis(config.drop_delay));
+
+    println!("Shutting off motor again to ensure it's safe");
+    if let Err(err) = run_motor(&slot_id, false) {
+        eprintln!("Couldn't turn off motor [again] for slot {} ({})! {:?}", slot, slot_id, err);
         return Err(err);
     }
-    println!("Drop completed. Allowing 2 seconds to settle.");
-    thread::sleep(Duration::from_secs(2));
-    println!("Drop transaction finished with {}", result);
+
+    println!("Drop transaction finished with {:?}", result);
 
     result
 }
