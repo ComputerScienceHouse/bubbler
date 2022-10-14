@@ -62,13 +62,19 @@ async fn drop(data: web::Data<Mutex<AppData>>, req_body: web::Json<DropRequest>)
 
 #[get("/health")]
 async fn health(data: web::Data<Mutex<AppData>>) -> impl Responder {
-    let slots = machine::get_slots_old(data.lock().unwrap().config.clone());
+    let slots = machine::get_slots(data.lock().unwrap().config.clone());
     let temperature = machine::get_temperature(data.lock().unwrap().config.clone());
 
     let temperature = temperature * (9.0/5.0) + 32.0;
 
+    let mut slots_strs: Vec<String> = Vec::new();
+    for slot in slots {
+        slots_strs.push(format!("Slot {} ({}) is {}", slot.id, slot.number,
+            if slot.stocked {"stocked"} else {"empty"})); 
+    }
+    
     HttpResponse::Ok().json(HealthReport {
-        slots: slots.to_vec(),
+        slots: slots_strs.to_vec(),
         temp: temperature,
     })
 }
