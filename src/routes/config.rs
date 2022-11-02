@@ -1,54 +1,75 @@
+use gpio_cdev::{Chip, LineHandle, LineRequestFlags};
 use std::env;
-use std::fs;
+use std::fmt::Display;
+use std::sync::Mutex;
 
-#[derive(Clone)]
+pub enum SlotConfig {
+    OWFS(String),
+    GPIO {
+        vend: LineHandle,
+        stocked: LineHandle,
+    },
+}
+
+impl Display for SlotConfig {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::OWFS(id) => write!(f, "{}", id),
+            Self::GPIO { vend, stocked } => {
+                write!(f, "{}.{}", vend.line().offset(), stocked.line().offset())
+            }
+        }
+    }
+}
+
 pub struct ConfigData {
     pub temperature_id: String,
-    pub slot_ids: Vec<String>,
+    pub slots: Vec<SlotConfig>,
     pub drop_delay: u64,
 }
 
 impl ConfigData {
-    pub fn initialize_slots(self: ConfigData) -> std::io::Result<()> {
-        for slot in self.slot_ids {
-            if slot.len() <= 4 {
-                fs::write(
-                    "/sys/class/gpio/export",
-                    slot.to_string()
-                )?;
-                fs::write(
-                    format!(
-                        "/sys/class/gpio/gpio{}/direction",
-                        slot.to_string()
-                    ),
-                    "high"
-                )?;
-                fs::write(
-                    format!(
-                        "/sys/class/gpio/gpio{}/active_low",
-                        slot.to_string()
-                    ),
-                    "1"
-                )?;
+    pub fn new() -> ConfigData {
+        let mut slots: Vec<SlotConfig> = Vec::new();
+        if let Ok(addresses) = env::var("BUB_SLOT_ADDRESSES") {
+            let slot_addresses = addresses.split(',');
+            for slot in slot_addresses {
+                slots.push(SlotConfig::OWFS(slot.to_string()));
+            }
+        } else {
+            let vend = env::var("BUB_VEND_PINS").unwrap();
+            let vend = vend.split(',');
+            let stocked = env::var("BUB_STOCKED_PINS").unwrap();
+            let stocked = stocked.split(',');
+            let mut chip = Chip::new("/dev/gpiochip0").unwrap();
+            for (vend, stocked) in vend.zip(stocked) {
+                let vend = chip
+                    .get_line(vend.parse::<u32>().unwrap())
+                    .unwrap()
+                    .request(LineRequestFlags::OUTPUT, 0, "bubbler-vend")
+                    .unwrap();
+                let stocked = chip
+                    .get_line(stocked.parse::<u32>().unwrap())
+                    .unwrap()
+                    .request(LineRequestFlags::INPUT, 0, "bubbler-stocked")
+                    .unwrap();
+                slots.push(SlotConfig::GPIO { vend, stocked });
             }
         }
-        return Ok(());
-    }
-    pub fn new() -> ConfigData {
-        let addresses = env::var("BUB_SLOT_ADDRESSES").unwrap();
-        let slots = addresses.split(",");
-        let mut string_slots: Vec<String> = Vec::new();
-        for slot in slots {
-            string_slots.push(slot.to_string());
-        }
-        return ConfigData {
+        ConfigData {
             temperature_id: env::var("BUB_TEMP_ADDRESS").unwrap(),
-            slot_ids: string_slots,
-            drop_delay: env::var("BUB_DROP_DELAY").unwrap().parse::<u64>().unwrap()
-        };
+            slots,
+            drop_delay: env::var("BUB_DROP_DELAY").unwrap().parse::<u64>().unwrap(),
+        }
+    }
+}
+
+impl Default for ConfigData {
+    fn default() -> ConfigData {
+        ConfigData::new()
     }
 }
 
 pub struct AppData {
-    pub config: ConfigData
+    pub config: Mutex<ConfigData>,
 }

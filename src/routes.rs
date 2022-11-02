@@ -1,12 +1,12 @@
 extern crate serde_json;
 
-use actix_web::{get, post, web, HttpResponse, Responder};
 use actix_web::http::StatusCode;
+use actix_web::{get, post, web, HttpResponse, Responder};
 use serde::{Deserialize, Serialize};
-use std::sync::Mutex;
+use std::ops::Deref;
 
-pub mod machine;
 pub mod config;
+pub mod machine;
 use config::AppData;
 use machine::DropError;
 
@@ -39,33 +39,36 @@ struct DropErrorRes {
 }
 
 #[post("/drop")]
-async fn drop(data: web::Data<Mutex<AppData>>, req_body: web::Json<DropRequest>) -> impl Responder {
-    let drop_result = machine::drop(data.lock().unwrap().config.clone(), req_body.slot);
+async fn drop(data: web::Data<AppData>, req_body: web::Json<DropRequest>) -> impl Responder {
+    let drop_result = machine::drop(data.config.lock().unwrap().deref(), req_body.slot);
     match drop_result {
         Ok(_) => HttpResponse::Ok().json(DropResponse {
-            message: "Dropped drink from slot ".to_string() + &req_body.slot.to_string()
+            message: "Dropped drink from slot ".to_string() + &req_body.slot.to_string(),
         }),
         Err(DropError::BadSlot) => {
-            HttpResponse::Ok().status(StatusCode::BAD_REQUEST).json(DropErrorRes {
-                error: "Invalid slot ID provided".to_string(),
-                errorCode: 400
-            })
-        },
-        Err(DropError::MotorFailed) => {
-            HttpResponse::Ok().status(StatusCode::INTERNAL_SERVER_ERROR).json(DropErrorRes {
-                error: "Motor failed to actuate".to_string(),
-                errorCode: 500
-            })
+            HttpResponse::Ok()
+                .status(StatusCode::BAD_REQUEST)
+                .json(DropErrorRes {
+                    error: "Invalid slot ID provided".to_string(),
+                    errorCode: 400,
+                })
         }
+        Err(DropError::MotorFailed) => HttpResponse::Ok()
+            .status(StatusCode::INTERNAL_SERVER_ERROR)
+            .json(DropErrorRes {
+                error: "Motor failed to actuate".to_string(),
+                errorCode: 500,
+            }),
     }
 }
 
 #[get("/health")]
-async fn health(data: web::Data<Mutex<AppData>>) -> impl Responder {
-    let slots = machine::get_slots_old(data.lock().unwrap().config.clone());
-    let temperature = machine::get_temperature(data.lock().unwrap().config.clone());
+async fn health(data: web::Data<AppData>) -> impl Responder {
+    let config = data.config.lock().unwrap();
+    let slots = machine::get_slots_old(config.deref());
+    let temperature = machine::get_temperature(config.deref());
 
-    let temperature = temperature * (9.0/5.0) + 32.0;
+    let temperature = temperature * (9.0 / 5.0) + 32.0;
 
     HttpResponse::Ok().json(HealthReport {
         slots: slots.to_vec(),
@@ -74,12 +77,10 @@ async fn health(data: web::Data<Mutex<AppData>>) -> impl Responder {
 }
 
 #[get("/slots")]
-async fn get_slots(data: web::Data<Mutex<AppData>>) -> impl Responder {
-    let slots = machine::get_slots(data.lock().unwrap().config.clone());
-    let temp = machine::get_temperature(data.lock().unwrap().config.clone());
+async fn get_slots(data: web::Data<AppData>) -> impl Responder {
+    let config = data.config.lock().unwrap();
+    let slots = machine::get_slots(config.deref());
+    let temp = machine::get_temperature(config.deref());
 
-    HttpResponse::Ok().json(SlotReport {
-        slots,
-        temp,
-    })
+    HttpResponse::Ok().json(SlotReport { slots, temp })
 }
