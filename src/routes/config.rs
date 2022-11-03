@@ -1,54 +1,134 @@
+use gpio_cdev::{Chip, LineHandle, LineRequestFlags};
 use std::env;
-use std::fs;
+use std::fmt::Display;
+use std::sync::mpsc::{channel, Sender};
+use std::sync::Mutex;
+use std::thread;
+use std::thread::JoinHandle;
+use std::time::{Duration, Instant};
 
-#[derive(Clone)]
+pub enum SlotConfig {
+    OWFS(String),
+    GPIO {
+        vend: LineHandle,
+        stocked: LineHandle,
+    },
+}
+
+impl Display for SlotConfig {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::OWFS(id) => write!(f, "{}", id),
+            Self::GPIO { vend, stocked } => {
+                write!(f, "{}.{}", vend.line().offset(), stocked.line().offset())
+            }
+        }
+    }
+}
+
+#[allow(dead_code)]
+pub struct Latch {
+    delete_thread: JoinHandle<()>,
+    sender: Sender<Instant>,
+}
+
+impl Latch {
+    fn new(pin: LineHandle) -> Self {
+        let (sender, receiver) = channel::<Instant>();
+        let delete_thread = thread::spawn(move || {
+            loop {
+                let instant = receiver.recv().unwrap();
+                let now = Instant::now();
+                if now > instant {
+                    continue;
+                }
+                pin.set_value(1).unwrap();
+                thread::sleep(instant.duration_since(now));
+                while let Ok(instant) = receiver.try_recv() {
+                    let now = Instant::now();
+                    if now > instant {
+                        continue;
+                    }
+                    // Let this run finish first
+                    thread::sleep(instant.duration_since(now));
+                }
+                pin.set_value(0).unwrap();
+            }
+        });
+        Latch {
+            delete_thread,
+            sender,
+        }
+    }
+    pub fn open(&self) {
+        // No way the motor will spin > 1 minute
+        self.sender
+            .send(Instant::now() + Duration::from_secs(60))
+            .unwrap();
+    }
+}
+
 pub struct ConfigData {
     pub temperature_id: String,
-    pub slot_ids: Vec<String>,
+    pub slots: Vec<SlotConfig>,
+    pub latch: Option<Latch>,
     pub drop_delay: u64,
 }
 
 impl ConfigData {
-    pub fn initialize_slots(self: ConfigData) -> std::io::Result<()> {
-        for slot in self.slot_ids {
-            if slot.len() <= 4 {
-                fs::write(
-                    "/sys/class/gpio/export",
-                    slot.to_string()
-                )?;
-                fs::write(
-                    format!(
-                        "/sys/class/gpio/gpio{}/direction",
-                        slot.to_string()
-                    ),
-                    "high"
-                )?;
-                fs::write(
-                    format!(
-                        "/sys/class/gpio/gpio{}/active_low",
-                        slot.to_string()
-                    ),
-                    "1"
-                )?;
+    pub fn new() -> ConfigData {
+        let mut slots: Vec<SlotConfig> = Vec::new();
+        if let Ok(addresses) = env::var("BUB_SLOT_ADDRESSES") {
+            let slot_addresses = addresses.split(',');
+            for slot in slot_addresses {
+                slots.push(SlotConfig::OWFS(slot.to_string()));
+            }
+        } else {
+            let vend = env::var("BUB_VEND_PINS").unwrap();
+            let vend = vend.split(',');
+            let stocked = env::var("BUB_STOCKED_PINS").unwrap();
+            let stocked = stocked.split(',');
+            let mut chip = Chip::new("/dev/gpiochip0").unwrap();
+            for (vend, stocked) in vend.zip(stocked) {
+                let vend = chip
+                    .get_line(vend.parse::<u32>().unwrap())
+                    .unwrap()
+                    .request(LineRequestFlags::OUTPUT, 0, "bubbler-vend")
+                    .unwrap();
+                let stocked = chip
+                    .get_line(stocked.parse::<u32>().unwrap())
+                    .unwrap()
+                    .request(LineRequestFlags::INPUT, 0, "bubbler-stocked")
+                    .unwrap();
+                slots.push(SlotConfig::GPIO { vend, stocked });
             }
         }
-        return Ok(());
-    }
-    pub fn new() -> ConfigData {
-        let addresses = env::var("BUB_SLOT_ADDRESSES").unwrap();
-        let slots = addresses.split(",");
-        let mut string_slots: Vec<String> = Vec::new();
-        for slot in slots {
-            string_slots.push(slot.to_string());
-        }
-        return ConfigData {
+        ConfigData {
             temperature_id: env::var("BUB_TEMP_ADDRESS").unwrap(),
-            slot_ids: string_slots,
-            drop_delay: env::var("BUB_DROP_DELAY").unwrap().parse::<u64>().unwrap()
-        };
+            slots,
+            latch: env::var("BUB_LATCH_PIN")
+                .map(|pin| pin.parse::<u32>().unwrap())
+                .map(|pin| {
+                    Chip::new("/dev/gpiochip0")
+                        .unwrap()
+                        .get_line(pin)
+                        .unwrap()
+                        .request(LineRequestFlags::OUTPUT, 0, "bubbler-latch")
+                        .unwrap()
+                })
+                .map(Latch::new)
+                .ok(),
+            drop_delay: env::var("BUB_DROP_DELAY").unwrap().parse::<u64>().unwrap(),
+        }
+    }
+}
+
+impl Default for ConfigData {
+    fn default() -> ConfigData {
+        ConfigData::new()
     }
 }
 
 pub struct AppData {
-    pub config: ConfigData
+    pub config: Mutex<ConfigData>,
 }
