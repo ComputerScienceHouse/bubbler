@@ -1,5 +1,3 @@
-extern crate actix_web;
-
 use actix_web::{web, App, HttpServer};
 use std::sync::Mutex;
 

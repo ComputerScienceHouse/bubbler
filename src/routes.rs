@@ -1,5 +1,3 @@
-extern crate serde_json;
-
 use actix_web::http::StatusCode;
 use actix_web::{get, post, web, HttpResponse, Responder};
 use serde::{Deserialize, Serialize};
