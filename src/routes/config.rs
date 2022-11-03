@@ -1,7 +1,11 @@
 use gpio_cdev::{Chip, LineHandle, LineRequestFlags};
 use std::env;
 use std::fmt::Display;
+use std::sync::mpsc::{channel, Sender};
 use std::sync::Mutex;
+use std::thread;
+use std::thread::JoinHandle;
+use std::time::{Duration, Instant};
 
 pub enum SlotConfig {
     OWFS(String),
@@ -22,9 +26,52 @@ impl Display for SlotConfig {
     }
 }
 
+#[allow(dead_code)]
+pub struct Latch {
+    delete_thread: JoinHandle<()>,
+    sender: Sender<Instant>,
+}
+
+impl Latch {
+    fn new(pin: LineHandle) -> Self {
+        let (sender, receiver) = channel::<Instant>();
+        let delete_thread = thread::spawn(move || {
+            loop {
+                let instant = receiver.recv().unwrap();
+                let now = Instant::now();
+                if now > instant {
+                    continue;
+                }
+                pin.set_value(1).unwrap();
+                thread::sleep(instant.duration_since(now));
+                while let Ok(instant) = receiver.try_recv() {
+                    let now = Instant::now();
+                    if now > instant {
+                        continue;
+                    }
+                    // Let this run finish first
+                    thread::sleep(instant.duration_since(now));
+                }
+                pin.set_value(0).unwrap();
+            }
+        });
+        Latch {
+            delete_thread,
+            sender,
+        }
+    }
+    pub fn open(&self) {
+        // No way the motor will spin > 1 minute
+        self.sender
+            .send(Instant::now() + Duration::from_secs(60))
+            .unwrap();
+    }
+}
+
 pub struct ConfigData {
     pub temperature_id: String,
     pub slots: Vec<SlotConfig>,
+    pub latch: Option<Latch>,
     pub drop_delay: u64,
 }
 
@@ -59,6 +106,18 @@ impl ConfigData {
         ConfigData {
             temperature_id: env::var("BUB_TEMP_ADDRESS").unwrap(),
             slots,
+            latch: env::var("BUB_LATCH_PIN")
+                .map(|pin| pin.parse::<u32>().unwrap())
+                .map(|pin| {
+                    Chip::new("/dev/gpiochip0")
+                        .unwrap()
+                        .get_line(pin)
+                        .unwrap()
+                        .request(LineRequestFlags::OUTPUT, 0, "bubbler-latch")
+                        .unwrap()
+                })
+                .map(Latch::new)
+                .ok(),
             drop_delay: env::var("BUB_DROP_DELAY").unwrap().parse::<u64>().unwrap(),
         }
     }

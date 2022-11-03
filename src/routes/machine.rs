@@ -109,6 +109,9 @@ pub fn drop(config: &ConfigData, slot: usize) -> Result<DropState, DropError> {
     println!("Dropping {}!", slot_config);
 
     let mut result = Ok(DropState::Success);
+    if let Some(latch) = config.latch.as_ref() {
+        latch.open();
+    }
     if let Err(err) = run_motor(slot_config, true) {
         eprintln!("Problem dropping {} ({})! {:?}", slot, slot_config, err);
         result = Err(err);
@@ -130,7 +133,7 @@ pub fn drop(config: &ConfigData, slot: usize) -> Result<DropState, DropError> {
         OWFS(_) => {
             println!("Drop completed. Allowing another drop time to stop motors again.");
             thread::sleep(Duration::from_millis(config.drop_delay));
-            
+
             println!("Shutting off motor again to ensure it's safe");
             if let Err(err) = run_motor(slot_config, false) {
                 eprintln!(
@@ -139,10 +142,10 @@ pub fn drop(config: &ConfigData, slot: usize) -> Result<DropState, DropError> {
                 );
                 return Err(err);
             }
-        },
-        GPIO {..} => {
+        }
+        GPIO { .. } => {
             println!("Drop completed (GPIO drop, we trust the kernel)");
-        },
+        }
     };
 
     println!("Drop transaction finished with {:?}", result);
