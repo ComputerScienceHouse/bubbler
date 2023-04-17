@@ -13,6 +13,11 @@ pub enum SlotConfig {
         vend: LineHandle,
         stocked: LineHandle,
     },
+    NewdrinkSmall {
+        vend: LineHandle,
+        stock: LineHandle,
+        cam: LineHandle,
+    },
 }
 
 impl Display for SlotConfig {
@@ -22,6 +27,13 @@ impl Display for SlotConfig {
             Self::GPIO { vend, stocked } => {
                 write!(f, "{}.{}", vend.line().offset(), stocked.line().offset())
             }
+            Self::NewdrinkSmall { vend, stock, cam } => write!(
+                f,
+                "{}.{}.{}",
+                vend.line().offset(),
+                stock.line().offset(),
+                cam.line().offset()
+            ),
         }
     }
 }
@@ -82,6 +94,31 @@ impl ConfigData {
             let slot_addresses = addresses.split(',');
             for slot in slot_addresses {
                 slots.push(SlotConfig::OWFS(slot.to_string()));
+            }
+        } else if let Ok(vend) = env::var("BUB_NEW_VEND_PINS") {
+            let vends = vend.split(",");
+            let stock = env::var("BUB_NEW_STOCK_PINS").unwrap();
+            let stock = stock.split(",");
+            let cam = env::var("BUB_NEW_CAM_PINS").unwrap();
+            let cam = cam.split(",");
+            let mut chip = Chip::new("/dev/gpiochip0").unwrap();
+            for ((vend, stock), cam) in vends.zip(stock).zip(cam) {
+                let vend = chip
+                    .get_line(vend.parse::<u32>().unwrap())
+                    .unwrap()
+                    .request(LineRequestFlags::OUTPUT, 0, "bubbler-vend")
+                    .unwrap();
+                let stock = chip
+                    .get_line(stock.parse::<u32>().unwrap())
+                    .unwrap()
+                    .request(LineRequestFlags::INPUT, 0, "bubbler-stocked")
+                    .unwrap();
+                let cam = chip
+                    .get_line(cam.parse::<u32>().unwrap())
+                    .unwrap()
+                    .request(LineRequestFlags::INPUT, 0, "bubbler-cam")
+                    .unwrap();
+                slots.push(SlotConfig::NewdrinkSmall { vend, stock, cam });
             }
         } else {
             let vend = env::var("BUB_VEND_PINS").unwrap();

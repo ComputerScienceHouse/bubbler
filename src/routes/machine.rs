@@ -32,6 +32,7 @@ pub fn get_temperature(config: &ConfigData) -> f32 {
 fn is_stocked(slot: &SlotConfig) -> bool {
     match slot {
         GPIO { stocked, .. } => stocked.get_value().unwrap() == 1,
+        NewdrinkSmall { stock, .. } => stock.get_value().unwrap() == 1,
         OWFS(id) => fs::File::open(format!("/mnt/w1/{}/id", id)).is_ok(),
     }
 }
@@ -89,6 +90,9 @@ pub fn run_motor(slot: &SlotConfig, state: bool) -> Result<DropState, DropError>
         GPIO { vend, .. } => vend
             .set_value(num_state)
             .map_err(|err| format!("{:?}", err)),
+        NewdrinkSmall { vend, .. } => vend
+            .set_value(num_state)
+            .map_err(|err| format!("{:?}", err)),
     };
     match motor_okay {
         Err(err) => {
@@ -120,6 +124,13 @@ pub fn drop(config: &ConfigData, slot: usize) -> Result<DropState, DropError> {
         thread::sleep(Duration::from_millis(config.drop_delay));
     }
 
+    if let NewdrinkSmall { cam, .. } = slot_config {
+        println!("Waiting for cam {:?} to stop motor", cam.line());
+        while cam.get_value().unwrap() != 1 {
+            thread::sleep(Duration::from_millis(config.drop_delay));
+        }
+    }
+
     println!("Shutting off motor for slot {} ({})", slot, slot_config);
     if let Err(err) = run_motor(slot_config, false) {
         eprintln!(
@@ -145,6 +156,9 @@ pub fn drop(config: &ConfigData, slot: usize) -> Result<DropState, DropError> {
         }
         GPIO { .. } => {
             println!("Drop completed (GPIO drop, we trust the kernel)");
+        }
+        NewdrinkSmall { .. } => {
+            println!("Drop completed, should have worked :)")
         }
     };
 
