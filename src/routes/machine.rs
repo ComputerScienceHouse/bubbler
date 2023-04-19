@@ -127,7 +127,7 @@ pub fn drop(config: &ConfigData, slot: usize) -> Result<DropState, DropError> {
     if let NewdrinkSmall { cam, .. } = slot_config {
         println!("Waiting for cam {:?} to stop motor", cam.line());
         while cam.get_value().unwrap() != 1 {
-            thread::sleep(Duration::from_millis(config.drop_delay));
+            thread::sleep(Duration::from_millis(config.poll_delay));
         }
     }
 

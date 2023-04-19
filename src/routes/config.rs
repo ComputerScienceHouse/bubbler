@@ -85,6 +85,7 @@ pub struct ConfigData {
     pub slots: Vec<SlotConfig>,
     pub latch: Option<Latch>,
     pub drop_delay: u64,
+    pub poll_delay: u64,
 }
 
 impl ConfigData {
@@ -156,6 +157,7 @@ impl ConfigData {
                 .map(Latch::new)
                 .ok(),
             drop_delay: env::var("BUB_DROP_DELAY").unwrap().parse::<u64>().unwrap(),
+            poll_delay: env::var("BUB_POLL_DELAY").unwrap().parse::<u64>().unwrap(),
         }
     }
 }
